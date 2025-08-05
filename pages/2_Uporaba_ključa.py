@@ -12,7 +12,7 @@ def odstrani_sumnike(text):
         text = text.replace(znak, nadomestek)
     return text
 
-st.set_page_config(page_title="Uporaba ključa", page_icon="🔐")
+st.set_page_config(page_title="Uporaba ključa")
 
 st.title("Uporaba ključa za šifriranje sporočila")
 
