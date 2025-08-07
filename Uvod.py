@@ -1,100 +1,100 @@
 import streamlit as st
 
-st.title("QKD - BB84 Simulacija")
+st.title("QKD - BB84 Simulation")
 
 st.markdown("""
-### Kaj je kvantna distribucija ključa (QKD)?
+### What is Quantum Key Distribution (QKD)?
 
-**Kvantna distribucija ključa** (QKD, angl. *Quantum Key Distribution*) je metoda, s katero dve osebi (običajno imenovani Alice in Bob) delita skrivni šifrirni ključ preko kvantnega kanala. Posebnost QKD je, da zagotavlja **informacijsko varnost**, saj temelji na zakonih **kvantne mehanike** in ne le na matematičnih predpostavkah.
+**Quantum Key Distribution** (QKD) is a method by which two parties (commonly called Alice and Bob) share a secret encryption key over a quantum channel. The special feature of QKD is that it guarantees **information-theoretic security**, as it is based on the laws of **quantum mechanics** rather than just mathematical assumptions.
 
-* V primeru prestrezanja (npr. s strani Eve) sistem to zazna, ker **kvantnih stanj ni mogoče meriti brez motenja**.
-* Temeljni pojmi:
+* In the case of interception (e.g., by Eve), the system detects it because **quantum states cannot be measured without disturbance**.
+* Fundamental concepts:
 
-  * **Superpozicija**: kvantni delec (npr. foton) lahko obstaja v več stanjih hkrati.
-  * **Meritev poruši stanje**: ko nekdo izmeri kvantni delec, ta "kolapsira" v eno izmed možnosti.
-  * **No-cloning theorem**: kvantnih stanj ni mogoče kopirati brez napake.
+  * **Superposition**: a quantum particle (e.g., photon) can exist in multiple states simultaneously.
+  * **Measurement disturbs the state**: when someone measures a quantum particle, it "collapses" into one of the possible states.
+  * **No-cloning theorem**: quantum states cannot be copied without errors.
 
 ---
 
-### Protokol BB84 – koraki natančno
+### BB84 Protocol – step by step
 
-BB84 je prvi in najbolj znan QKD protokol, ki sta ga razvila **Charles Bennett** in **Gilles Brassard** leta 1984.
+BB84 is the first and best-known QKD protocol developed by **Charles Bennett** and **Gilles Brassard** in 1984.
 
-#### Korak 1: Alice generira naključne bite in baze
+#### Step 1: Alice generates random bits and bases
 
-* Za vsak bit naključno izbere:
+* For each bit, she randomly chooses:
 
-  * **Bit**: `0` ali `1`
-  * **Bazo**:
+  * **Bit**: `0` or `1`
+  * **Basis**:
 
-    * **Rectilinear** (|, −): 0° ali 90°
-    * **Diagonal** (/ , \\): 45° ali 135°
-* Alice torej vsakič pošlje foton z eno od **štirih možnih polarizacij**:
+    * **Rectilinear** (|, −): 0° or 90°
+    * **Diagonal** (/ , \\): 45° or 135°
+* Alice sends a photon polarized in one of **four possible polarizations**:
 
   * `0` → 0°, 45°
   * `1` → 90°, 135°
 
-#### Korak 2: Alice pošlje fotone po kvantnem kanalu
+#### Step 2: Alice sends photons through the quantum channel
 
-* Vsak foton potuje skozi **kvantni kanal** do Boba.
-* Kvantna lastnost: foton "nosi" polarizacijo, vendar se ne more gledati, ne da bi se spremenil.
+* Each photon travels through the **quantum channel** to Bob.
+* Quantum property: the photon "carries" polarization but cannot be observed without changing it.
 
-#### Korak 3: Bob meri fotone
+#### Step 3: Bob measures the photons
 
-* Bob za vsak foton naključno izbere eno bazo (rectilinear ali diagonal).
-* Če izbere isto bazo kot Alice:
+* Bob randomly chooses a basis (rectilinear or diagonal) for each photon.
+* If he chooses the same basis as Alice:
 
-  * **Meritev je pravilna** → dobi enak bit.
-* Če izbere napačno bazo:
+  * **Measurement is correct** → he gets the same bit.
+* If he chooses the wrong basis:
 
-  * **Meritev je naključna** → z 50 % verjetnostjo dobi pravilen ali napačen bit.
+  * **Measurement is random** → 50% chance to get the correct or incorrect bit.
 
-#### Korak 4: Primerjava baz
+#### Step 4: Basis comparison
 
-* Po meritvah Alice in Bob **javnosti razkrijeta, katere baze** sta uporabila (ne pa vrednosti bitov).
-* Obdržita le tiste bite, kjer sta imela **ujemajočo bazo**.
+* After measurements, Alice and Bob **publicly reveal which bases** they used (but not the bit values).
+* They keep only the bits where their bases **matched**.
 
-  * To imenujemo **surovi ključ** (*raw key*).
+  * This is called the **raw key**.
 
-#### Korak 5: Odkrivanje Eve (opcija)
+#### Step 5: Detecting Eve (optional)
 
-* Če Eve prisluškuje, mora **izvesti meritev** → a ne ve, katero bazo izbrati.
-* Posledično:
+* If Eve eavesdrops, she must **perform measurements** but doesn't know which basis to choose.
+* Consequently:
 
-  * V kvantnih meritev vnaša napake.
-  * Alice in Bob lahko preverita **napako v vzorcu** ključa.
-  * Če napaka presega določen prag → **prisluškovanje je zaznano**.
+  * She introduces errors in quantum measurements.
+  * Alice and Bob can check the **error rate** in the key.
+  * If the error rate exceeds a threshold → **eavesdropping is detected**.
 
-#### Korak 6: Korekcija napak in ekstrakcija ključa
+#### Step 6: Error correction and key extraction
 
-* Alice in Bob popravita morebitne napake (npr. z algoritmi ECC).
-* Uporabita **privacy amplification** – postopek, ki zmanjša vpliv morebitno prestreženih bitov.
-
----
-
-### Zakaj BB84 deluje?
-
-BB84 deluje zaradi treh ključnih kvantnih zakonitosti:
-
-1. **Meritev poruši kvantno stanje**
-2. **Ne moremo razlikovati kvantnih stanj brez znanja baze**
-3. **Ni mogoče klonirati kvantnega stanja brez napake**
-
-Zaradi tega lahko Alice in Bob zaznata vsako prisluškovanje in s tem zagotovita **nepogojno varnost** (v teoriji).
+* Alice and Bob correct any errors (e.g., using ECC algorithms).
+* They apply **privacy amplification** – a process reducing the impact of any intercepted bits.
 
 ---
 
-### Primer simulacije:
+### Why does BB84 work?
 
-| Alice polarizacija | Alice baza  | Bob baza         | Rezultat            |
-| ------------------ | ----------- | ---------------- | ------------------- |
-| 0°                 | rectilinear | rectilinear (0°) | pravilno (bit 0)    |
-| 0°                 | rectilinear | diagonal (45°)   | naključno (0 ali 1) |
-| 45°                | diagonal    | rectilinear (0°) | naključno (0 ali 1) |
-| 45°                | diagonal    | diagonal (45°)   | pravilno (bit 0)    |
-| 90°                | rectilinear | rectilinear (0°) | pravilno (bit 1)    |
-| 90°                | rectilinear | diagonal (45°)   | naključno (0 ali 1) |
-| 135°               | diagonal    | rectilinear (0°) | naključno (0 ali 1) |
-| 135°               | diagonal    | diagonal (45°)   | pravilno (bit 1)    |
+BB84 works because of three key quantum principles:
+
+1. **Measurement disturbs the quantum state**
+2. **Quantum states cannot be distinguished without knowledge of the basis**
+3. **Quantum states cannot be cloned without errors**
+
+Because of this, Alice and Bob can detect any eavesdropping and thus guarantee **unconditional security** (in theory).
+
+---
+
+### Example simulation:
+
+| Alice polarization | Alice basis  | Bob basis         | Result             |
+| ------------------ | ----------- | ---------------- | ------------------ |
+| 0°                 | rectilinear | rectilinear (0°) | correct (bit 0)    |
+| 0°                 | rectilinear | diagonal (45°)   | random (0 or 1)    |
+| 45°                | diagonal    | rectilinear (0°) | random (0 or 1)    |
+| 45°                | diagonal    | diagonal (45°)   | correct (bit 0)    |
+| 90°                | rectilinear | rectilinear (0°) | correct (bit 1)    |
+| 90°                | rectilinear | diagonal (45°)   | random (0 or 1)    |
+| 135°               | diagonal    | rectilinear (0°) | random (0 or 1)    |
+| 135°               | diagonal    | diagonal (45°)   | correct (bit 1)    |
 
 """)
