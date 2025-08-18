@@ -86,15 +86,15 @@ Because of this, Alice and Bob can detect any eavesdropping and thus guarantee *
 
 ### Example simulation:
 
-| Alice polarization | Alice basis  | Bob basis         | Result             |
-| ------------------ | ----------- | ---------------- | ------------------ |
-| 0°                 | rectilinear | rectilinear (0°) | correct (bit 0)    |
-| 0°                 | rectilinear | diagonal (45°)   | random (0 or 1)    |
-| 45°                | diagonal    | rectilinear (0°) | random (0 or 1)    |
-| 45°                | diagonal    | diagonal (45°)   | correct (bit 0)    |
-| 90°                | rectilinear | rectilinear (0°) | correct (bit 1)    |
-| 90°                | rectilinear | diagonal (45°)   | random (0 or 1)    |
-| 135°               | diagonal    | rectilinear (0°) | random (0 or 1)    |
-| 135°               | diagonal    | diagonal (45°)   | correct (bit 1)    |
+| Alice polarization | Bob basis        | Result             |
+| ------------------ | ---------------- | ------------------ |
+| 0°                 | 0°               | 0                  |
+| 0°                 | 45°              | random (0 or 1)    |
+| 45°                | 0°               | random (0 or 1)    |
+| 45°                | 45°              | 0                  |
+| 90°                | 0°               | 1                  |
+| 90°                | 45°              | random (0 or 1)    |
+| 135°               | 0°               | random (0 or 1)    |
+| 135°               | 45°              | 1                  |
 
 """)
