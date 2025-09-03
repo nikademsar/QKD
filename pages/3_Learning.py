@@ -14,24 +14,32 @@ Your task: for each row, enter what **Bob’s bit** would be in the ideal case. 
 )
 
 # -------------------------- Data generation --------------------------
-ANGLE = {("rect", 0): 0, ("rect", 1): 90, ("diag", 0): 45, ("diag", 1): 135}
+POLARIZATIONS = [-45, 0, 45, 90]
+BASIS = [0, 45]
+
+# Map to expected bit based on your table
+EXPECTED_TABLE = {
+    (-45, 0): "r",
+    (-45, 45): "0",
+    (0, 0): "0",
+    (0, 45): "r",
+    (45, 0): "r",
+    (45, 45): "1",
+    (90, 0): "1",
+    (90, 45): "r",
+}
 
 def generate_exercise(n: int):
     items = []
     for i in range(n):
-        alice_basis = random.choice(["rect", "diag"])
-        alice_bit = random.choice([0, 1])
-        bob_basis = random.choice(["rect", "diag"])
+        alice_angle = random.choice(POLARIZATIONS)
+        bob_angle = random.choice(BASIS)
 
-        alice_angle = ANGLE[(alice_basis, alice_bit)]
-        bob_angle = random.choice([0, 90]) if bob_basis == "rect" else random.choice([45, 135])
-
-        expected = str(alice_bit) if alice_basis == bob_basis else "r"
+        expected = EXPECTED_TABLE[(alice_angle, bob_angle)]
 
         items.append(
             {
                 "Seq #": i + 1,
-                "Alice bit": alice_bit,
                 "Alice angle (°)": alice_angle,
                 "Bob angle (°)": bob_angle,
                 "Your input (0/1/r)": "",
@@ -81,7 +89,6 @@ if check:
         results.append(
             {
                 "Seq #": base_df.iloc[i]["Seq #"],
-                "Alice bit": base_df.iloc[i]["Alice bit"],
                 "Alice angle (°)": base_df.iloc[i]["Alice angle (°)"],
                 "Bob angle (°)": base_df.iloc[i]["Bob angle (°)"],
                 "Your input": user_raw,
