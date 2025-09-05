@@ -3,8 +3,6 @@ import streamlit as st
 import pandas as pd
 import io
 from collections import defaultdict
-from datetime import datetime
-import re
 import zipfile
 
 st.set_page_config(page_title="QDrift - Measurement Analysis", layout="wide")
@@ -14,7 +12,8 @@ st.title("Measurement Analysis")
 st.write(
     "Upload one or more CSV/TSV files with measurements. "
     "The app will locate columns for measurement number and pin44/pin45, "
-    "run analysis for each file separately, and allow download individually or as ZIP."
+    "run analysis for each file separately, and allow download individually or as ZIP. "
+    "All conclusions can also be exported as a combined CSV."
 )
 
 # Helper: Expected columns
@@ -33,8 +32,37 @@ with st.expander("Expected input file shapes (examples)"):
     )
 
 uploaded_files = st.file_uploader(
-    "Choose CSV/TSV files", type=["csv","tsv","txt"], accept_multiple_files=True
+    "Choose CSV/TSV files", type=["csv", "tsv", "txt"], accept_multiple_files=True
 )
+
+# ---------------------------- Setup file ----------------------------
+SETUP_FILE = r"L:\AstroMetriQ\QDrift\measurements_setup.csv"
+try:
+    df_setup = pd.read_csv(SETUP_FILE, sep=None, engine="python", encoding="latin1")
+except Exception as e:
+    st.error(f"Could not load setup file: {e}")
+    df_setup = pd.DataFrame()
+
+def find_setup_for_file(file_name: str, df_setup: pd.DataFrame):
+    """Poveži measurement file z nastavitvami."""
+    try:
+        base = file_name.split("_meas_")
+        if len(base) != 2:
+            return None
+        datetime_str = base[0]  # npr. 2025-09-04_11-39-00
+        num_measurements = int(base[1].replace(".csv", ""))
+        print("DEBUG >>>", num_measurements)
+
+        match = df_setup[
+            (df_setup["MEASUREMENT_START_DATETIME"] == datetime_str) &
+            (df_setup["NUMBER_OF_MEASUREMENTS"] == num_measurements)
+        ]
+
+        if not match.empty:
+            return match.iloc[0].to_dict()
+        return None
+    except Exception:
+        return None
 
 # ---------------------------- Helper functions ----------------------------
 def try_detect_columns(df: pd.DataFrame):
@@ -224,10 +252,30 @@ def bb84_conclusion(df_results: pd.DataFrame, measurements, eve_qber_threshold: 
     eve_present = qber_pct > eve_qber_threshold
     return probs_alice, probs_bob, qber_pct, eve_present
 
+def build_conclusion_dict(fname, total, pin44_count, pin44_pct,
+                          pin45_count, pin45_pct, out_count, out_pct,
+                          qber_pct, setup_info):
+    row = {
+        "File name": fname,
+        "Number of measurements": total,
+        "Pin44 Active (count)": pin44_count,
+        "Pin44 Active (%)": pin44_pct,
+        "Pin45 Active (count)": pin45_count,
+        "Pin45 Active (%)": pin45_pct,
+        "Out of Range (count)": out_count,
+        "Out of Range (%)": out_pct,
+        "Noise (QBER proxy %)": round(qber_pct, 2),
+    }
+    if setup_info:
+        for k, v in setup_info.items():
+            row[k] = v
+    return row
+
 # ---------------------------- UI flow ----------------------------
 if uploaded_files:
     zip_buffer = io.BytesIO()
     zip_files = []
+    all_conclusions = []
 
     for uploaded_file in uploaded_files:
         st.header(f"File: {uploaded_file.name}")
@@ -265,12 +313,16 @@ if uploaded_files:
         pA135 = round(probs_alice[135] * 100, 2)
         pB0  = round(probs_bob[0]  * 100, 2)
         pB45 = round(probs_bob[1]  * 100, 2)
-        st.subheader("Conclusion")
-        st.markdown(
-            f"- Probability of **Alice angle**: 0° **{pA0}%**, 45° **{pA45}%**, 90° **{pA90}%**, 135° **{pA135}%**\n"
-            f"- Probability of **Bob basis**: 0° **{pB0}%**, 45° **{pB45}%**\n"
-            f"- **Noise (QBER proxy)**: {qber_pct:.2f}% → Eve is **{'present' if eve_present else 'not present'}** (threshold 11%)"
-        )
+
+        # --- Counts and percentages for pins + out_of_range ---
+        total = len(df_results)
+        pin44_count = int(df_results["Pin44 Active (1/0)"].sum())
+        pin45_count = int(df_results["Pin45 Active (1/0)"].sum())
+        out_count   = int(df_results["Out of Normal Range"].sum())
+
+        pin44_pct = round(pin44_count / total * 100, 2) if total > 0 else 0
+        pin45_pct = round(pin45_count / total * 100, 2) if total > 0 else 0
+        out_pct   = round(out_count   / total * 100, 2) if total > 0 else 0
 
         # prepare CSV for individual download
         csv_buffer = io.StringIO()
@@ -279,10 +331,35 @@ if uploaded_files:
 
         # individual file download
         fname = uploaded_file.name.replace(".csv","_analysis.csv")
+        st.subheader("Conclusion")
+        st.markdown(
+            f"- **File name**: {fname}\n"
+            f"- **Number of measurements**: {total}\n"
+            f"- **Pin44 Active**: {pin44_count}× ({pin44_pct}%)\n"
+            f"- **Pin45 Active**: {pin45_count}× ({pin45_pct}%)\n"
+            f"- **Out of Normal Range**: {out_count}× ({out_pct}%)\n"
+            f"- **Noise (QBER proxy)**: {qber_pct:.2f}% (Eve threshold 11%)"
+        )
         st.download_button("Download this analysis as CSV", data=csv_bytes, file_name=fname, mime="text/csv")
+
+        # --- ADD SETTINGS INFO ---
+        setup_info = find_setup_for_file(uploaded_file.name, df_setup)
+        if setup_info:
+            st.markdown("**Measurement Setup Parameters:**")
+            for k, v in setup_info.items():
+                st.write(f"- {k}: {v}")
 
         # add to zip
         zip_files.append((fname, csv_bytes))
+
+        # save for global conclusions
+        all_conclusions.append(
+            build_conclusion_dict(fname, total,
+                                  pin44_count, pin44_pct,
+                                  pin45_count, pin45_pct,
+                                  out_count, out_pct,
+                                  qber_pct, setup_info)
+        )
 
     # --- ZIP all analyses ---
     if len(zip_files) > 1:
@@ -295,6 +372,20 @@ if uploaded_files:
             data=zip_bytes,
             file_name="all_analyses.zip",
             mime="application/zip"
+        )
+
+    # --- Export all conclusions as one CSV ---
+    if all_conclusions:
+        df_conclusions = pd.DataFrame(all_conclusions)
+        csv_buffer = io.StringIO()
+        df_conclusions.to_csv(csv_buffer, index=False)
+        csv_bytes = csv_buffer.getvalue().encode("utf-8")
+
+        st.download_button(
+            "Download all Conclusions as CSV",
+            data=csv_bytes,
+            file_name="all_conclusions.csv",
+            mime="text/csv"
         )
 
 else:

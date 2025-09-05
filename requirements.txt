@@ -1,3 +1,9 @@
 streamlit
 pandas
 requests
+pyarrow
+numpy
+scikit-learn
+torch
+streamlit
+matplotlib

@@ -9,8 +9,8 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 
 # ---------- 0) konfiguracija ----------
-INPUT_FOLDER  = r"C:\Users\nikde\Desktop\podatki_cv"
-OUTPUT_FOLDER = r"C:\Users\nikde\Desktop\podatki_pt"
+INPUT_FOLDER  = r"C:\Users\nikde\Desktop\q-drift\podatki\podatki_cv"
+OUTPUT_FOLDER = r"C:\Users\nikde\Desktop\q-drift\podatki\podatki_pt"
 
 # parametri modela
 TIMESTAMP_COL = None
