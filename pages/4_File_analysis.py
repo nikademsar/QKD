@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import pandas as pd
 import io
@@ -16,7 +15,7 @@ st.write(
     "All conclusions can also be exported as a combined CSV."
 )
 
-# Helper: Expected columns
+# ---------------------------- Expected input file info ----------------------------
 with st.expander("Expected input file shapes (examples)"):
     st.markdown(
         """
@@ -31,40 +30,65 @@ with st.expander("Expected input file shapes (examples)"):
     """
     )
 
+# ---------------------------- File uploads ----------------------------
 uploaded_files = st.file_uploader(
-    "Choose CSV/TSV files", type=["csv", "tsv", "txt"], accept_multiple_files=True
+    "Choose CSV files", type=["csv", "tsv", "txt"], accept_multiple_files=True
 )
 
-# ---------------------------- Setup file ----------------------------
-SETUP_FILE = r"L:\AstroMetriQ\QDrift\measurements_setup.csv"
-try:
-    df_setup = pd.read_csv(SETUP_FILE, sep=None, engine="python", encoding="latin1")
-except Exception as e:
-    st.error(f"Could not load setup file: {e}")
-    df_setup = pd.DataFrame()
+# Setup file upload (optional)
+st.subheader("Upload Setup File (optional)")
+uploaded_setup_file = st.file_uploader(
+    "Choose setup CSV file", type=["csv"], key="setup_file"
+)
 
+df_setup = pd.DataFrame()
+if uploaded_setup_file is not None:
+    try:
+        df_setup = pd.read_csv(uploaded_setup_file, sep=None, engine="python", encoding="latin1")
+        st.success("Setup file loaded successfully.")
+    except Exception as e:
+        st.error(f"Could not load setup file: {e}")
+
+# Environment file upload (optional)
+st.subheader("Upload Environment File (optional)")
+uploaded_env_file = st.file_uploader(
+    "Choose environment CSV/TSV file", type=["csv", "tsv", "txt"], key="env_file"
+)
+
+df_env = pd.DataFrame()
+if uploaded_env_file is not None:
+    try:
+        # Skip the first 6 rows (metadata)
+        df_env = pd.read_csv(uploaded_env_file, sep=None, engine="python", encoding="latin1", skiprows=6)
+
+        # Remove trailing colons and spaces from column names
+        df_env.columns = [c.strip().replace(":", "") for c in df_env.columns]
+
+        # Combine date + time into datetime
+        df_env['DATETIME'] = pd.to_datetime(df_env['DATUM'] + ' ' + df_env['CAS'], dayfirst=True, errors='coerce')
+
+        st.success("Environment file loaded successfully.")
+    except Exception as e:
+        st.error(f"Could not load environment file: {e}")
+
+# ---------------------------- Helper functions ----------------------------
 def find_setup_for_file(file_name: str, df_setup: pd.DataFrame):
-    """Poveži measurement file z nastavitvami."""
     try:
         base = file_name.split("_meas_")
         if len(base) != 2:
             return None
-        datetime_str = base[0]  # npr. 2025-09-04_11-39-00
+        datetime_str = base[0]
         num_measurements = int(base[1].replace(".csv", ""))
-        print("DEBUG >>>", num_measurements)
-
         match = df_setup[
             (df_setup["MEASUREMENT_START_DATETIME"] == datetime_str) &
             (df_setup["NUMBER_OF_MEASUREMENTS"] == num_measurements)
         ]
-
         if not match.empty:
             return match.iloc[0].to_dict()
         return None
     except Exception:
         return None
 
-# ---------------------------- Helper functions ----------------------------
 def try_detect_columns(df: pd.DataFrame):
     cols = [c.lower() for c in df.columns.astype(str)]
     measure_names = ['measurement', 'measure', 'measure_num', 'meritev', 'id', 'measurement_number', 'measurement_no', 'measure_no']
@@ -138,7 +162,6 @@ def analyze_measurements(measurements):
     results = {}
     for measure_num, group in measurement_groups.items():
         total_samples = len(group)
-
         if total_samples < 4:
             results[measure_num] = {
                 'total_samples': total_samples,
@@ -146,13 +169,11 @@ def analyze_measurements(measurements):
                 'pin45_active': 0,
                 'avg_pin44': 0.0,
                 'avg_pin45': 0.0,
-                'out_of_range': 0,
             }
             continue
 
         third = group[2]
         fourth = group[3]
-
         try:
             pin44_values = [float(third[3]), float(fourth[3])]
             pin45_values = [float(third[4]), float(fourth[4])]
@@ -163,13 +184,12 @@ def analyze_measurements(measurements):
                 'pin45_active': 0,
                 'avg_pin44': 0.0,
                 'avg_pin45': 0.0,
-                'out_of_range': 0,
             }
             continue
 
         avg_pin44 = sum(pin44_values) / 2.0
         avg_pin45 = sum(pin45_values) / 2.0
-        pin44_active, pin45_active, out_of_range = active_pin(avg_pin44, avg_pin45)
+        pin44_active, pin45_active, _ = active_pin(avg_pin44, avg_pin45)
 
         results[measure_num] = {
             'total_samples': total_samples,
@@ -177,7 +197,6 @@ def analyze_measurements(measurements):
             'pin45_active': pin45_active,
             'avg_pin44': avg_pin44,
             'avg_pin45': avg_pin45,
-            'out_of_range': out_of_range,
         }
 
     return results
@@ -192,7 +211,6 @@ def results_to_dataframe(results: dict):
             "Pin45 Active (1/0)": stats['pin45_active'],
             "Avg Pin44 (mid points)": round(stats['avg_pin44'], 2),
             "Avg Pin45 (mid points)": round(stats['avg_pin45'], 2),
-            "Out of Normal Range": stats['out_of_range'],
         })
     if not rows:
         return pd.DataFrame()
@@ -203,58 +221,9 @@ def results_to_dataframe(results: dict):
         pass
     return df
 
-def bb84_conclusion(df_results: pd.DataFrame, measurements, eve_qber_threshold: float = 11.0):
-    rs = []
-    if not df_results.empty and "Avg Pin44 (mid points)" in df_results and "Avg Pin45 (mid points)" in df_results:
-        for p44, p45 in df_results[["Avg Pin44 (mid points)", "Avg Pin45 (mid points)"]].itertuples(index=False):
-            s = (p44 or 0) + (p45 or 0)
-            if s > 0:
-                rs.append((p44 or 0) / s)
-
-    n = len(rs)
-    a0 = sum(1 for r in rs if r >= 0.75)
-    a90 = sum(1 for r in rs if r <= 0.25)
-    adiag = n - a0 - a90
-    a45 = adiag / 2.0
-    a135 = adiag / 2.0
-    probs_alice = {0: a0/n if n>0 else 0.0, 45: a45/n if n>0 else 0.0, 90: a90/n if n>0 else 0.0, 135: a135/n if n>0 else 0.0}
-
-    p_bob45 = (sum(1 for r in rs if 0.40 <= r <= 0.60) / n) if n > 0 else 0.0
-    p_bob0 = max(0.0, 1.0 - p_bob45)
-    probs_bob = (p_bob0, p_bob45)
-
-    def dom(p44, p45):
-        s = p44 + p45
-        if s <= 0: return 'amb'
-        if abs(p44 - p45) <= 0.08 * s: return 'amb'
-        return '44' if p44 > p45 else '45'
-
-    groups = defaultdict(list)
-    for m in measurements:
-        if m is not None and len(m) > 4:
-            groups[m[1]].append(m)
-
-    flips, total = 0, 0
-    for g in groups.values():
-        if len(g) >= 4:
-            try:
-                p44_3, p45_3 = float(g[2][3]), float(g[2][4])
-                p44_4, p45_4 = float(g[3][3]), float(g[3][4])
-            except Exception:
-                continue
-            d1, d2 = dom(p44_3, p45_3), dom(p44_4, p45_4)
-            if d1 in ('44', '45') and d2 in ('44', '45'):
-                total += 1
-                if d1 != d2:
-                    flips += 1
-
-    qber_pct = (flips / total * 100.0) if total > 0 else 0.0
-    eve_present = qber_pct > eve_qber_threshold
-    return probs_alice, probs_bob, qber_pct, eve_present
-
 def build_conclusion_dict(fname, total, pin44_count, pin44_pct,
-                          pin45_count, pin45_pct, out_count, out_pct,
-                          qber_pct, setup_info):
+                          pin45_count, pin45_pct, setup_info, df_env=None, meas_time=None):
+    noise_pct = round(100.0 - pin44_pct - pin45_pct, 2)
     row = {
         "File name": fname,
         "Number of measurements": total,
@@ -262,16 +231,21 @@ def build_conclusion_dict(fname, total, pin44_count, pin44_pct,
         "Pin44 Active (%)": pin44_pct,
         "Pin45 Active (count)": pin45_count,
         "Pin45 Active (%)": pin45_pct,
-        "Out of Range (count)": out_count,
-        "Out of Range (%)": out_pct,
-        "Noise (QBER proxy %)": round(qber_pct, 2),
+        "Noise (%)": noise_pct,
     }
+
+    if df_env is not None and meas_time is not None and 'DATETIME' in df_env.columns:
+        df_env['TIME_DIFF'] = (df_env['DATETIME'] - meas_time).abs()
+        nearest = df_env.loc[df_env['TIME_DIFF'].idxmin()]
+        row['Humidity (%RH)'] = nearest.get('%RH', None)
+        row['Temperature (°C)'] = nearest.get('°C', None)
+
     if setup_info:
         for k, v in setup_info.items():
             row[k] = v
     return row
 
-# ---------------------------- UI flow ----------------------------
+# ---------------------------- Main processing loop ----------------------------
 if uploaded_files:
     zip_buffer = io.BytesIO()
     zip_files = []
@@ -305,60 +279,54 @@ if uploaded_files:
         st.subheader("Analysis Results")
         st.dataframe(df_results, use_container_width=True)
 
-        # --- SHORT CONCLUSION ---
-        probs_alice, probs_bob, qber_pct, eve_present = bb84_conclusion(df_results, measurements)
-        pA0   = round(probs_alice[0]   * 100, 2)
-        pA45  = round(probs_alice[45]  * 100, 2)
-        pA90  = round(probs_alice[90]  * 100, 2)
-        pA135 = round(probs_alice[135] * 100, 2)
-        pB0  = round(probs_bob[0]  * 100, 2)
-        pB45 = round(probs_bob[1]  * 100, 2)
-
-        # --- Counts and percentages for pins + out_of_range ---
+        # --- Counts and percentages for pins ---
         total = len(df_results)
         pin44_count = int(df_results["Pin44 Active (1/0)"].sum())
         pin45_count = int(df_results["Pin45 Active (1/0)"].sum())
-        out_count   = int(df_results["Out of Normal Range"].sum())
-
         pin44_pct = round(pin44_count / total * 100, 2) if total > 0 else 0
         pin45_pct = round(pin45_count / total * 100, 2) if total > 0 else 0
-        out_pct   = round(out_count   / total * 100, 2) if total > 0 else 0
 
-        # prepare CSV for individual download
+        # --- Prepare CSV for individual download ---
         csv_buffer = io.StringIO()
         df_results.to_csv(csv_buffer, index=False)
         csv_bytes = csv_buffer.getvalue().encode('utf-8')
+        fname_csv = uploaded_file.name.replace(".csv", "_analysis.csv")
+        st.download_button("Download this analysis as CSV", data=csv_bytes, file_name=fname_csv, mime="text/csv")
 
-        # individual file download
-        fname = uploaded_file.name.replace(".csv","_analysis.csv")
-        st.subheader("Conclusion")
-        st.markdown(
-            f"- **File name**: {fname}\n"
-            f"- **Number of measurements**: {total}\n"
-            f"- **Pin44 Active**: {pin44_count}× ({pin44_pct}%)\n"
-            f"- **Pin45 Active**: {pin45_count}× ({pin45_pct}%)\n"
-            f"- **Out of Normal Range**: {out_count}× ({out_pct}%)\n"
-            f"- **Noise (QBER proxy)**: {qber_pct:.2f}% (Eve threshold 11%)"
-        )
-        st.download_button("Download this analysis as CSV", data=csv_bytes, file_name=fname, mime="text/csv")
-
-        # --- ADD SETTINGS INFO ---
-        setup_info = find_setup_for_file(uploaded_file.name, df_setup)
+        # --- Setup info ---
+        setup_info = find_setup_for_file(uploaded_file.name, df_setup) if not df_setup.empty else None
         if setup_info:
             st.markdown("**Measurement Setup Parameters:**")
             for k, v in setup_info.items():
                 st.write(f"- {k}: {v}")
 
-        # add to zip
-        zip_files.append((fname, csv_bytes))
+        # --- Add to ZIP ---
+        zip_files.append((fname_csv, csv_bytes))
 
-        # save for global conclusions
+        # --- Measurement timestamp (first measurement) ---
+        meas_time = None
+        if measurements:
+            first_meas = measurements[0]
+            meas_time = pd.to_datetime(first_meas[1], dayfirst=True, errors='coerce')
+
+        # --- Build global conclusions ---
         all_conclusions.append(
-            build_conclusion_dict(fname, total,
+            build_conclusion_dict(fname_csv, total,
                                   pin44_count, pin44_pct,
                                   pin45_count, pin45_pct,
-                                  out_count, out_pct,
-                                  qber_pct, setup_info)
+                                  setup_info,
+                                  df_env=df_env,
+                                  meas_time=meas_time)
+        )
+
+        # --- Show summary ---
+        st.subheader("Conclusion")
+        st.markdown(
+            f"- **File name**: {fname_csv}\n"
+            f"- **Number of measurements**: {total}\n"
+            f"- **Pin44 Active**: {pin44_count}× ({pin44_pct}%)\n"
+            f"- **Pin45 Active**: {pin45_count}× ({pin45_pct}%)\n"
+            f"- **Noise**: {round(100.0 - pin44_pct - pin45_pct, 2)}%"
         )
 
     # --- ZIP all analyses ---
@@ -380,13 +348,11 @@ if uploaded_files:
         csv_buffer = io.StringIO()
         df_conclusions.to_csv(csv_buffer, index=False)
         csv_bytes = csv_buffer.getvalue().encode("utf-8")
-
         st.download_button(
             "Download all Conclusions as CSV",
             data=csv_bytes,
             file_name="all_conclusions.csv",
             mime="text/csv"
         )
-
 else:
     st.info("Upload one or more files to start the analysis.")
