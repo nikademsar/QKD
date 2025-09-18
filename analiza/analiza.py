@@ -1,5 +1,4 @@
 import pandas as pd
-import io
 import zipfile
 from collections import defaultdict
 import os
@@ -36,40 +35,42 @@ def find_setup_for_file(file_name: str, df_setup: pd.DataFrame):
     except Exception:
         return None
 
-def find_environment_for_file(file_name: str, df_env: pd.DataFrame):
-    if df_env.empty:
-        return None
-    try:
-        # Odstrani prve 6 vrstic in ponastavi index
-        df_env = df_env.iloc[6:].reset_index(drop=True)
-        df_env.rename(columns={
-            '\ufeffExactum Cloud': 'DATUM',
-            'Unnamed: 1': 'CAS',
-            'Unnamed: 2': 'NBIOT-282C02417557-867997036601341.humidity.2',
-            'Unnamed: 3': 'NBIOT-282C02417557-867997036601341.temperature.1',
-            'Unnamed: 4': 'YCT-METEOMK2-2BCF12.humidity',
-            'Unnamed: 5': 'YCT-METEOMK2-2BCF12.temperature',
+def find_environment_for_file(file_name: str, env_files: list[str]):
+    for env_file in env_files:
+        df_env = read_csv_with_fallback(env_file, sep=None) if os.path.exists(env_file) else pd.DataFrame()
+        if df_env.empty:
+            return None
+        try:
+            # Odstrani prve 6 vrstic in ponastavi index
+            df_env = df_env.iloc[6:].reset_index(drop=True)
+            new_columns = [
+                "DATE",
+                "TIME",
+                "HUMIDITY_BOX",
+                "TEMPERATURE_BOX",
+                "HUMIDITY_ROOM",
+                "TEMPERATURE_ROOM",
+            ]
+            df_env.columns = new_columns[:len(df_env.columns)]
 
-        }, inplace=True)
+            datetime_str = file_name.split("_meas_")[0]
+            date_part, time_part = datetime_str.split("_")
+            year, month, day = date_part.split("-")
 
-        datetime_str = file_name.split("_meas_")[0]
-        date_part, time_part = datetime_str.split("_")
-        year, month, day = date_part.split("-")
+            date = f"{int(day):02d}.{int(month):02d}.{int(year)}"
+            time = time_part.replace("-", ":")[:5]  # samo ure in minute
 
-        date = f"{int(day):02d}.{int(month):02d}.{int(year)}"
-        time = time_part.replace("-", ":")[:5]  # samo ure in minute
+            # Pretvori prvi dve stolpca v string
+            dates = df_env.iloc[:, 0].astype(str)
+            times = df_env.iloc[:, 1].astype(str).str[:5]
 
-        # Pretvori prvi dve stolpca v string
-        dates = df_env.iloc[:, 0].astype(str)
-        times = df_env.iloc[:, 1].astype(str).str[:5]
-
-        match = df_env[(dates.str.contains(date)) & (times == time)]
-        if not match.empty:
-            return match.iloc[0].to_dict()
-        return None
-    except Exception as e:
-        print(f"Error in find_environment_for_file: {e}")
-        return None
+            match = df_env[(dates.str.contains(date)) & (times == time)]
+            if not match.empty:
+                return match.iloc[0].to_dict()
+            return None
+        except Exception as e:
+            print(f"Error in find_environment_for_file: {e}")
+            return None
 
 # ---------------------------- Helpers ----------------------------
 def try_detect_columns(df: pd.DataFrame):
@@ -220,14 +221,16 @@ def build_conclusion_dict(fname, total, pin44_count, pin44_pct,
 # ---------------------------- MAIN ----------------------------
 if __name__ == "__main__":
     measurement_files = [
-        r"L:\AstroMetriQ\QDrift\logs\2025-09-03_14-56-01_meas_10000.csv",
-        r"L:\AstroMetriQ\QDrift\logs\2025-08-18_09-54-39_meas_100000.csv"
+        r"L:\AstroMetriQ\QDrift\logs\logs_measurements\2025-09-15_14-20-12_meas_10000.csv",
+        r"L:\AstroMetriQ\QDrift\logs\logs_measurements\2025-07-23_14-22-52_meas_10000.csv"
     ]
     setup_file = r"L:\AstroMetriQ\QDrift\measurements_setup.csv"
-    env_file = r"L:\AstroMetriQ\QDrift\okolje.csv"
+    env_files = [
+        r"L:\AstroMetriQ\QDrift\environment\okolje_julij.csv",
+        r"L:\AstroMetriQ\QDrift\environment\okolje_september-17.csv"
+    ]
 
     df_setup = read_csv_with_fallback(setup_file, sep=None) if os.path.exists(setup_file) else pd.DataFrame()
-    df_env = read_csv_with_fallback(env_file, sep=None) if os.path.exists(env_file) else pd.DataFrame()
 
     all_conclusions = []
     zip_files = []
@@ -273,7 +276,7 @@ if __name__ == "__main__":
         print(f"- Noise: {out_count} ({out_pct}%)")
 
         setup_info = find_setup_for_file(fname, df_setup)
-        env_info = find_environment_for_file(fname, df_env)  # vrne slovar
+        env_info = find_environment_for_file(fname, env_files)  # vrne slovar
 
         out_csv_name = fname.replace(".csv", "_analysis.csv")
         df_results.to_csv(out_csv_name, index=False)
