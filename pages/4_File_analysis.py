@@ -33,7 +33,6 @@ def find_setup_for_file(file_name: str, df_setup: pd.DataFrame):
         ]
         if not match.empty:
             return match.iloc[0].to_dict()
-
         return None
     except Exception:
         return None
@@ -188,14 +187,20 @@ def build_conclusion_dict(fname, total, pin44_count, pin44_pct,
     return row
 
 # ---------------------------- Streamlit App ----------------------------
-st.set_page_config(layout="wide")  # razširimo body aplikacije
-st.title("QDrift Analysis")
+st.set_page_config(layout="wide")
+st.title("QDrift Analysis (Session-State)")
 
 setup_file = st.file_uploader("Upload Setup CSV", type="csv")
 env_files = st.file_uploader("Upload Environment CSV files", type="csv", accept_multiple_files=True)
 measurement_files = st.file_uploader("Upload Measurement CSV files", type="csv", accept_multiple_files=True)
 
 run_analysis = st.button("Run Analysis")
+
+# Inicializacija session state
+if "conclusions" not in st.session_state:
+    st.session_state["conclusions"] = None
+if "zip_data" not in st.session_state:
+    st.session_state["zip_data"] = None
 
 if run_analysis:
     if not (measurement_files and setup_file):
@@ -238,12 +243,10 @@ if run_analysis:
                 pin45_pct = round(pin45_count / total * 100, 2) if total > 0 else 0
                 out_pct = 100 - pin44_pct - pin45_pct
 
-                # Setup info
                 setup_info = find_setup_for_file(fname, df_setup)
                 if setup_info is None:
                     setup_info = {col: None for col in df_setup.columns}
 
-                # Environment info
                 env_info = find_environment_for_file(fname, env_files)
                 if env_info is None and env_files:
                     try:
@@ -277,17 +280,23 @@ if run_analysis:
 
         if all_conclusions:
             df_conclusions = pd.DataFrame(all_conclusions)
-            st.subheader("Conclusions")
-            st.dataframe(df_conclusions)
-            st.download_button(
-                "Download All Analyses (ZIP)",
-                data=zip_buffer.getvalue(),
-                file_name="all_analyses.zip",
-                mime="application/zip"
-            )
-            st.download_button(
-                "Download Combined Conclusions (CSV)",
-                data=df_conclusions.to_csv(index=False).encode("utf-8"),
-                file_name="all_conclusions.csv",
-                mime="text/csv"
-            )
+            # shranimo v session state
+            st.session_state["conclusions"] = df_conclusions
+            st.session_state["zip_data"] = zip_buffer.getvalue()
+
+# Prikaz shranjenih rezultatov tudi po kliku download
+if st.session_state["conclusions"] is not None:
+    st.subheader("Conclusions")
+    st.dataframe(st.session_state["conclusions"])
+    st.download_button(
+        "Download All Analyses (ZIP)",
+        data=st.session_state["zip_data"],
+        file_name="all_analyses.zip",
+        mime="application/zip"
+    )
+    st.download_button(
+        "Download Combined Conclusions (CSV)",
+        data=st.session_state["conclusions"].to_csv(index=False).encode("utf-8"),
+        file_name="all_conclusions.csv",
+        mime="text/csv"
+    )
