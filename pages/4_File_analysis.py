@@ -190,9 +190,9 @@ def build_conclusion_dict(fname, total, pin44_count, pin44_pct,
 st.set_page_config(layout="wide")
 st.title("QDrift Analysis (Session-State)")
 
-setup_file = st.file_uploader("Upload Setup CSV", type="csv")
-env_files = st.file_uploader("Upload Environment CSV files", type="csv", accept_multiple_files=True)
-measurement_files = st.file_uploader("Upload Measurement CSV files", type="csv", accept_multiple_files=True)
+measurement_files = st.file_uploader("Upload Measurement files", type="csv", accept_multiple_files=True)
+env_files = st.file_uploader("Upload Environment files", type="csv", accept_multiple_files=True)
+setup_file = st.file_uploader("Upload Measurements Setup file", type="csv")
 
 run_analysis = st.button("Run Analysis")
 
@@ -203,12 +203,15 @@ if "zip_data" not in st.session_state:
     st.session_state["zip_data"] = None
 
 if run_analysis:
-    if not (measurement_files and setup_file):
-        st.error("Please upload setup and measurement files.")
+    if not measurement_files:
+        st.error("Please upload measurement files.")
     else:
         try:
-            df_setup = read_csv_with_fallback(setup_file)
-            df_setup.columns = df_setup.columns.str.strip().str.replace('\ufeff','')
+            if setup_file:
+                df_setup = read_csv_with_fallback(setup_file)
+                df_setup.columns = df_setup.columns.str.strip().str.replace('\ufeff', '')
+            else:
+                df_setup = pd.DataFrame()
         except Exception as e:
             st.error(f"Error loading setup CSV: {e}")
             df_setup = pd.DataFrame()
